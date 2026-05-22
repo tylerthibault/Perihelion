@@ -843,7 +843,7 @@ async function speakWithKokoro(npc, text, force = false) {
     const body = await readJson(response);
     if (!response.ok || !body.audioUrl) {
       if (force) {
-        showToast(`${body.message || "Kokoro not active."} Using browser fallback.`, "info");
+        // Silently fall back to browser speech — Kokoro is optional
       }
       return false;
     }
