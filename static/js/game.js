@@ -142,6 +142,7 @@ let speechVoices = [];
 let lastSpokenNpcMessageId = null;
 const npcAudioPlayer = new Audio();
 let ttsStatus = null;
+let kokoroFallbackToasted = false;
 const galaxySize = { width: 1000, height: 700 };
 const mapChart = {
   zoom: 1,
@@ -816,17 +817,30 @@ async function speakNpcMessageWithBestProvider(npc, message, text, force = false
 }
 
 async function speakWithKokoro(npc, text, force = false) {
-  if (!window.kokoroBrowser || window.kokoroBrowser.getState() === "error") {
+  const state = window.kokoroBrowser ? window.kokoroBrowser.getState() : "idle";
+  if (state === "error") {
+    if (!kokoroFallbackToasted) {
+      kokoroFallbackToasted = true;
+      showToast("Kokoro failed to load. Using browser speech fallback.", "warning");
+    }
+    return false;
+  }
+  if (!window.kokoroBrowser || state !== "ready") {
+    // Still loading — silently use browser speech
     return false;
   }
   try {
     stopNpcSpeech();
     await window.kokoroBrowser.speak(text, npc);
-    // Update status label after first successful generation so it reflects "ready"
+    kokoroFallbackToasted = false;
     renderSelectedCommsContext();
     return true;
   } catch (error) {
     console.warn("[kokoro-client] speak error:", error);
+    if (!kokoroFallbackToasted) {
+      kokoroFallbackToasted = true;
+      showToast("Kokoro voice error. Using browser speech fallback.", "warning");
+    }
     return false;
   }
 }
