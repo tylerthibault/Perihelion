@@ -61,6 +61,13 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
         app.config["TTS_CACHE_DIR"] = str(Path(app.instance_path) / "tts_cache")
     init_db(app.config["DATABASE"])
 
+    @app.after_request
+    def add_coop_coep_headers(response):
+        """Required for SharedArrayBuffer used by kokoro-js ONNX runtime."""
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
+        return response
+
     def db_connection() -> sqlite3.Connection:
         return connect_db(app.config["DATABASE"])
 
