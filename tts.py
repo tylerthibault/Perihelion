@@ -76,7 +76,7 @@ def synthesize_tts(text: str, npc: dict[str, Any], cache_dir: str | Path) -> dic
 
     missing = missing_kokoro_dependencies()
     if missing:
-        raise TTSUnavailable(f"Missing Kokoro dependencies: {', '.join(missing)}")
+        raise TTSUnavailable(f"Kokoro dependencies not installed: {', '.join(missing)}")
 
     cache_path = Path(cache_dir)
     cache_path.mkdir(parents=True, exist_ok=True)
