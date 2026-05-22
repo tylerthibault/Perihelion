@@ -612,23 +612,9 @@ async function refreshCommsContext(showErrors = true) {
 }
 
 async function refreshTtsStatus(showErrors = false) {
-  try {
-    const response = await fetch(commsUrls.ttsStatus);
-    const body = await readJson(response);
-    if (!response.ok) {
-      if (showErrors) {
-        showToast(body.message || "Voice status unavailable.", "warning");
-      }
-      return;
-    }
-    ttsStatus = body;
-    renderSelectedCommsContext();
-  } catch (error) {
-    console.error(error);
-    if (showErrors) {
-      showToast("Voice status unavailable.", "warning");
-    }
-  }
+  // Status is now driven by the browser-side kokoro-client module.
+  ttsStatus = { available: false }; // placeholder; voiceStatusText reads kokoroBrowser.getState()
+  renderSelectedCommsContext();
 }
 
 function renderComms() {
@@ -750,14 +736,18 @@ function renderSelectedCommsContext() {
 }
 
 function voiceStatusText() {
-  if (!ttsStatus) {
-    return "Voice: checking Kokoro neural voice status...";
+  const state = window.kokoroBrowser ? window.kokoroBrowser.getState() : "idle";
+  if (state === "ready") {
+    return "Voice: Kokoro neural voice ready (browser-side).";
   }
-  if (ttsStatus.available) {
-    return "Voice: Kokoro neural voice ready. Browser speech remains fallback.";
+  if (state === "loading") {
+    return "Voice: Kokoro loading model... browser speech active in the meantime.";
   }
-  const browserFallback = speechSupported() ? "Browser speech fallback is active." : "No browser speech fallback is available here.";
-  return `Voice: Kokoro not active. ${browserFallback} ${ttsStatus.message || ""}`;
+  if (state === "error") {
+    const fb = speechSupported() ? "Browser speech fallback is active." : "No speech available in this browser.";
+    return `Voice: Kokoro failed to load. ${fb}`;
+  }
+  return speechSupported() ? "Voice: Browser speech active." : "Voice: No speech available in this browser.";
 }
 
 function speechSupported() {
@@ -826,36 +816,17 @@ async function speakNpcMessageWithBestProvider(npc, message, text, force = false
 }
 
 async function speakWithKokoro(npc, text, force = false) {
+  if (!window.kokoroBrowser || window.kokoroBrowser.getState() === "error") {
+    return false;
+  }
   try {
-    const response = await fetch(commsUrls.ttsSpeak, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        npc: {
-          id: npc.id,
-          name: npc.name,
-          gender: npc.gender,
-          role: npc.role,
-        },
-      }),
-    });
-    const body = await readJson(response);
-    if (!response.ok || !body.audioUrl) {
-      if (force) {
-        // Silently fall back to browser speech — Kokoro is optional
-      }
-      return false;
-    }
     stopNpcSpeech();
-    npcAudioPlayer.src = body.audioUrl;
-    await npcAudioPlayer.play();
+    await window.kokoroBrowser.speak(text, npc);
+    // Update status label after first successful generation so it reflects "ready"
+    renderSelectedCommsContext();
     return true;
   } catch (error) {
-    console.warn(error);
-    if (force) {
-      showToast("Kokoro voice did not answer. Falling back to browser voice.", "warning");
-    }
+    console.warn("[kokoro-client] speak error:", error);
     return false;
   }
 }
