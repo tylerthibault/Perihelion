@@ -242,9 +242,13 @@ def set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
 
 
 def provider_settings(db: sqlite3.Connection, public: bool = False) -> dict[str, Any]:
-    base_url = get_setting(db, "llm_base_url") or os.environ.get("LLM_BASE_URL", "http://localhost:1234/v1")
-    model = get_setting(db, "llm_model") or os.environ.get("LLM_MODEL", "")
-    api_key = get_setting(db, "llm_api_key") or os.environ.get("LLM_API_KEY", "")
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    default_url = "https://api.groq.com/openai/v1" if groq_key else "http://localhost:1234/v1"
+    default_model = "llama-3.1-8b-instant" if groq_key else ""
+    default_key = groq_key
+    base_url = get_setting(db, "llm_base_url") or os.environ.get("LLM_BASE_URL", default_url)
+    model = get_setting(db, "llm_model") or os.environ.get("LLM_MODEL", default_model)
+    api_key = get_setting(db, "llm_api_key") or os.environ.get("LLM_API_KEY", default_key)
     timeout = get_setting(db, "llm_timeout") or os.environ.get("LLM_TIMEOUT", "20")
     settings = {
         "baseUrl": base_url,
