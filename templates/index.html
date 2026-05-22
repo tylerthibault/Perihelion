@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Perihelion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Captain's console</p>
+          <h1>Perihelion</h1>
+        </div>
+        <div class="topbar__actions">
+          <span class="user-badge" id="userBadge">Guest</span>
+          <button class="icon-button" id="waitButton" title="Wait one day" aria-label="Wait one day">⏱</button>
+          <button class="settings-button" id="notesButton">Notes</button>
+          <button class="settings-button" id="commsButton">Comms</button>
+          <button class="settings-button" id="settingsButton">Settings</button>
+          <button class="settings-button is-hidden" id="logoutButton">Logout</button>
+          <button class="danger-button" id="newGameButton">New run</button>
+        </div>
+      </header>
+
+      <div class="breadcrumb-bar" id="breadcrumbTrail" aria-label="Current location">
+        Galaxy
+      </div>
+
+      <section class="status-grid" aria-label="Ship status">
+        <article>
+          <span>Ship</span>
+          <strong id="shipName">Peregrine</strong>
+        </article>
+        <article>
+          <span>Status</span>
+          <strong id="status">Loading</strong>
+        </article>
+        <article>
+          <span>Travel</span>
+          <strong id="travelState">Loading</strong>
+        </article>
+        <article>
+          <span>Credits</span>
+          <strong id="credits">0</strong>
+        </article>
+        <article>
+          <span>Fuel</span>
+          <strong id="fuel">0/0</strong>
+        </article>
+        <article>
+          <span>Hull</span>
+          <strong id="hull">0/0</strong>
+        </article>
+        <article>
+          <span>Cargo</span>
+          <strong id="cargo">0/0</strong>
+        </article>
+        <article>
+          <span>Course</span>
+          <strong id="courseStatus">None</strong>
+        </article>
+      </section>
+
+      <nav class="console-nav" aria-label="Console views">
+        <button class="is-active" data-view="navigation">Galaxy</button>
+        <button data-view="local">System</button>
+        <button data-view="commerce">Trade</button>
+        <button data-view="contracts">Contracts</button>
+        <button data-view="ship">Ship</button>
+      </nav>
+
+      <section class="console-views">
+        <section class="view" id="view-overview">
+          <section class="panel system-panel fill-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Current system</p>
+                <h2 id="systemName">Loading</h2>
+              </div>
+              <button class="explore-button">Scan for signals</button>
+            </div>
+            <p class="system-description" id="systemDescription"></p>
+            <dl class="system-facts">
+              <div>
+                <dt>Faction</dt>
+                <dd id="systemFaction"></dd>
+              </div>
+              <div>
+                <dt>Economy</dt>
+                <dd id="systemEconomy"></dd>
+              </div>
+              <div>
+                <dt>Risk</dt>
+                <dd id="systemRisk"></dd>
+              </div>
+            </dl>
+          </section>
+        </section>
+
+        <section class="view" id="view-local">
+          <section class="panel fill-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Local map</p>
+                <h2>Places</h2>
+              </div>
+              <div class="panel-actions">
+                <button class="explore-button">Scan system</button>
+                <span id="visitedPlaceBadge" class="day-badge">0 visited</span>
+              </div>
+            </div>
+            <div id="currentPlace" class="current-place"></div>
+            <nav class="zoom-tabs" id="localScopeTabs" aria-label="Local zoom levels">
+              <button class="is-active" data-scope="system">System</button>
+              <button data-scope="station">Station</button>
+              <button data-scope="planet">Planet</button>
+              <button data-scope="place">Place</button>
+            </nav>
+            <div class="local-browser">
+              <section class="local-places" aria-label="Local locations">
+                <div id="localTargets" class="target-list"></div>
+              </section>
+              <section class="local-detail" aria-label="Sub-locations">
+                <div class="local-detail__header">
+                  <div>
+                    <p class="eyebrow" id="localTargetMeta">Selected location</p>
+                    <h3 id="localTargetTitle">Local places</h3>
+                    <p id="localTargetSummary"></p>
+                  </div>
+                  <div id="localTargetActions" class="local-target-actions"></div>
+                </div>
+                <div id="localSublocations" class="place-list scroll-area"></div>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="view is-active" id="view-navigation">
+          <section class="panel fill-panel navigation-panel" id="navigationPanel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Sector map</p>
+                <h2>Navigation</h2>
+              </div>
+              <div class="chart-controls" aria-label="Map controls">
+                <span id="discoveryBadge" class="day-badge">1/10000 charted</span>
+                <button class="explore-button">Scan for signals</button>
+                <button id="zoomOutButton" aria-label="Zoom out">-</button>
+                <span id="zoomLevel">100%</span>
+                <button id="zoomInButton" aria-label="Zoom in">+</button>
+                <button id="fitGalaxyButton">Fit</button>
+                <button id="expandMapButton" aria-pressed="false">Expand map</button>
+              </div>
+            </div>
+            <div class="navigation-layout">
+              <aside class="map-sidebar">
+                <div class="map" id="sectorMap" aria-label="Known star systems"></div>
+              </aside>
+              <section class="navigation-workspace" aria-label="Route planning">
+                <div id="systemDetails" class="system-details"></div>
+                <div id="plottedCourse" class="plotted-course"></div>
+                <div id="gatePanel" class="gate-panel"></div>
+                <div class="travel-list" id="travelList"></div>
+                <div id="catalogDetail" class="catalog-detail is-hidden"></div>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-contracts">
+          <section class="panel fill-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Contracts</p>
+                <h2>Missions</h2>
+              </div>
+            </div>
+            <div id="activeMission" class="active-mission"></div>
+            <div id="missionList" class="mission-list"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-commerce">
+          <section class="panel fill-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Exchange</p>
+                <h2>Market</h2>
+              </div>
+            </div>
+            <div id="marketContext" class="market-context"></div>
+            <div class="market-table" id="market"></div>
+            <div class="service-row">
+              <button id="refuelButton">Refuel at station</button>
+              <button id="rescueButton">Call rescue fuel</button>
+              <button id="repairButton">Repair</button>
+            </div>
+            <div id="serviceHelp" class="service-help"></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-ship">
+          <div class="ship-grid">
+            <section class="panel ship-status-panel fill-panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Ship systems</p>
+                  <h2>Upgrades</h2>
+                </div>
+              </div>
+              <div id="shipSummary" class="ship-summary"></div>
+              <div id="shipAiPanel" class="ship-ai-panel"></div>
+              <div id="upgradeList" class="upgrade-list"></div>
+            </section>
+
+            <section class="panel fill-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Hold manifest</p>
+                <h2>Cargo</h2>
+              </div>
+            </div>
+            <div class="inventory" id="inventory"></div>
+            </section>
+
+            <section class="panel log-panel fill-panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Ship log</p>
+                  <h2>Comms</h2>
+                </div>
+                <span id="dayBadge" class="day-badge">Day 1</span>
+              </div>
+              <ol id="log" class="log"></ol>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="auth-overlay is-hidden" id="authOverlay" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <section class="auth-panel">
+        <div class="panel__header">
+          <div>
+            <p class="eyebrow">Captain access</p>
+            <h2 id="authTitle">Login or register</h2>
+          </div>
+        </div>
+        <p class="settings-note">Create a captain account to save your ship, share NPCs, and use multiplayer comms.</p>
+        <div class="auth-form">
+          <label>
+            Username
+            <input id="authUsername" autocomplete="username" maxlength="32">
+          </label>
+          <label>
+            Password
+            <input id="authPassword" type="password" autocomplete="current-password">
+          </label>
+          <div class="auth-actions">
+            <button id="loginButton">Login</button>
+            <button id="registerButton">Register</button>
+          </div>
+          <p id="authMessage" class="settings-note"></p>
+        </div>
+      </section>
+    </div>
+
+    <div class="comms-overlay is-hidden" id="commsOverlay" role="dialog" aria-modal="true" aria-labelledby="commsTitle">
+      <section class="comms-panel">
+        <div class="panel__header">
+          <div>
+            <p class="eyebrow">Live channels</p>
+            <h2 id="commsTitle">Comms</h2>
+          </div>
+          <button id="commsCloseButton">Close</button>
+        </div>
+        <div id="commsProviderNotice" class="settings-note"></div>
+        <div class="comms-layout">
+          <aside class="comms-sidebar">
+            <nav class="comms-tabs" id="commsTabs" aria-label="Comms channels">
+              <button class="is-active" data-channel="npc">Nearby</button>
+              <button data-channel="global">Global</button>
+              <button data-channel="local">Local</button>
+              <button data-channel="friends">Friends</button>
+              <button data-channel="dm">DMs</button>
+              <button data-channel="group">Groups</button>
+            </nav>
+            <div id="commsNpcList" class="npc-list"></div>
+            <div id="commsSocialTools" class="comms-social-tools"></div>
+          </aside>
+          <section class="comms-main">
+            <div id="commsSelectedContext" class="comms-selected-context"></div>
+            <div id="pendingCommsActions" class="pending-actions"></div>
+            <div id="commsMessages" class="comms-message-list" aria-live="polite"></div>
+            <form id="commsForm" class="comms-form">
+              <textarea id="commsInput" rows="3" placeholder="Speak normally. Use *action* or (action) for physical actions."></textarea>
+              <button id="commsSendButton" type="submit">Send</button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <div class="notes-overlay is-hidden" id="notesOverlay" role="dialog" aria-modal="true" aria-labelledby="notesTitle">
+      <section class="notes-panel">
+        <div class="panel__header">
+          <div>
+            <p class="eyebrow">Private captain notes</p>
+            <h2 id="notesTitle">Notebook</h2>
+          </div>
+          <button id="notesCloseButton">Close</button>
+        </div>
+        <p class="settings-note">These notes are saved only to your account. NPCs and other players cannot see them.</p>
+        <div id="noteTargetTabs" class="note-target-tabs"></div>
+        <label>
+          Title
+          <input id="noteTitle" maxlength="120" placeholder="Optional note title">
+        </label>
+        <label>
+          Note
+          <textarea id="noteBody" rows="10" placeholder="Write a private note..."></textarea>
+        </label>
+        <div class="notes-actions">
+          <button id="saveNoteButton">Save note</button>
+        </div>
+        <p id="noteStatus" class="settings-note"></p>
+      </section>
+    </div>
+
+    <div class="settings-overlay is-hidden" id="settingsOverlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <section class="settings-panel">
+        <div class="panel__header">
+          <div>
+            <p class="eyebrow">Dev settings</p>
+            <h2 id="settingsTitle">Cheats</h2>
+          </div>
+          <button id="settingsCloseButton">Close</button>
+        </div>
+        <p class="settings-note">Use these while building and testing the galaxy. Costs still appear in previews so the real balance stays visible.</p>
+        <div id="cheatList" class="cheat-list"></div>
+        <section class="provider-settings" id="providerSettings">
+          <div class="panel__header compact-header">
+            <div>
+              <p class="eyebrow">Comms provider</p>
+              <h3>LLM adapter</h3>
+            </div>
+          </div>
+          <p class="settings-note">OpenAI-compatible chat completions. LM Studio usually runs at http://localhost:1234; /v1 is added automatically when needed.</p>
+          <label>
+            Base URL
+            <input id="llmBaseUrl" placeholder="http://localhost:1234/v1">
+          </label>
+          <label>
+            Model
+            <input id="llmModel" placeholder="local-model-name">
+          </label>
+          <label>
+            API key
+            <input id="llmApiKey" type="password" placeholder="Optional">
+          </label>
+          <button id="saveProviderButton">Save provider</button>
+          <p id="providerStatus" class="settings-note"></p>
+        </section>
+      </section>
+    </div>
+
+    <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+  </body>
+</html>

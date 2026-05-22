@@ -1,0 +1,4 @@
+# Kokoro currently publishes wheels for Python 3.10-3.12.
+kokoro>=0.9.4; python_version >= "3.10" and python_version < "3.13"
+soundfile>=0.12.1; python_version >= "3.10" and python_version < "3.13"
+numpy>=1.26; python_version >= "3.10" and python_version < "3.13"
