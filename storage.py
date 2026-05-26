@@ -139,6 +139,28 @@ def init_db(path: str | os.PathLike[str] | None = None) -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS scene_memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                place_id TEXT NOT NULL,
+                place_name TEXT NOT NULL DEFAULT '',
+                first_description TEXT NOT NULL DEFAULT '',
+                dm_summary TEXT NOT NULL DEFAULT '',
+                visit_count INTEGER NOT NULL DEFAULT 1,
+                first_visited_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_visited_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, place_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS explore_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                place_id TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         ensure_column(db, "npc_profiles", "gender", "TEXT NOT NULL DEFAULT 'Unspecified'")
@@ -641,3 +663,89 @@ def is_group_member(db: sqlite3.Connection, group_id: int, user_id: int) -> bool
         (group_id, user_id),
     ).fetchone()
     return bool(row)
+
+
+# ---------------------------------------------------------------------------
+# Scene memory (DM-driven exploration)
+# ---------------------------------------------------------------------------
+
+
+def get_scene_memory(db: sqlite3.Connection, user_id: int, place_id: str) -> dict[str, Any] | None:
+    """Return stored scene memory for a place, or None if first visit."""
+    row = db.execute(
+        "SELECT * FROM scene_memories WHERE user_id = ? AND place_id = ?",
+        (user_id, place_id),
+    ).fetchone()
+    if not row:
+        return None
+    return dict(row)
+
+
+def save_scene_memory(
+    db: sqlite3.Connection,
+    user_id: int,
+    place_id: str,
+    place_name: str,
+    first_description: str,
+    dm_summary: str,
+) -> dict[str, Any]:
+    """Upsert scene memory. On first visit stores the full DM opening; on revisit updates summary and bumps count."""
+    existing = get_scene_memory(db, user_id, place_id)
+    if existing:
+        db.execute(
+            """
+            UPDATE scene_memories
+            SET dm_summary = ?, visit_count = visit_count + 1, last_visited_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND place_id = ?
+            """,
+            (dm_summary, user_id, place_id),
+        )
+    else:
+        db.execute(
+            """
+            INSERT INTO scene_memories
+                (user_id, place_id, place_name, first_description, dm_summary, visit_count)
+            VALUES (?, ?, ?, ?, ?, 1)
+            """,
+            (user_id, place_id, place_name, first_description, dm_summary),
+        )
+    db.commit()
+    return get_scene_memory(db, user_id, place_id)  # type: ignore[return-value]
+
+
+def list_scene_memories(db: sqlite3.Connection, user_id: int) -> list[dict[str, Any]]:
+    """Return all discovered scenes for a user, most recent first."""
+    rows = db.execute(
+        """
+        SELECT place_id, place_name, dm_summary, visit_count, first_visited_at, last_visited_at
+        FROM scene_memories
+        WHERE user_id = ?
+        ORDER BY last_visited_at DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def insert_explore_message(
+    db: sqlite3.Connection, user_id: int, place_id: str, sender: str, body: str
+) -> None:
+    db.execute(
+        "INSERT INTO explore_messages (user_id, place_id, sender, body) VALUES (?, ?, ?, ?)",
+        (user_id, place_id, sender, body),
+    )
+    db.commit()
+
+
+def list_explore_messages(
+    db: sqlite3.Connection, user_id: int, place_id: str, limit: int = 10
+) -> list[dict[str, Any]]:
+    rows = db.execute(
+        """
+        SELECT sender, body, created_at FROM explore_messages
+        WHERE user_id = ? AND place_id = ?
+        ORDER BY id DESC LIMIT ?
+        """,
+        (user_id, place_id, limit),
+    ).fetchall()
+    return list(reversed([dict(r) for r in rows]))

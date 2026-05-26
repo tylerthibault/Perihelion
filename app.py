@@ -36,6 +36,7 @@ from storage import (
     list_groups,
     list_personal_notes,
     list_pending_actions,
+    list_scene_memories,
     load_player_state,
     provider_settings,
     public_user,
@@ -45,6 +46,7 @@ from storage import (
     save_provider_settings,
     verify_user,
 )
+from explore import enter_scene, handle_explore_message, stream_dm_reply
 import tts
 
 
@@ -402,6 +404,89 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
                 if member:
                     add_group_member(db, group["id"], member["id"])
             return jsonify({"groups": list_groups(db, user["id"]), "message": f"Group {group['name']} created."}), 201
+
+    # ------------------------------------------------------------------
+    # Explore / DM-driven walk-around routes
+    # ------------------------------------------------------------------
+
+    def _resolve_current_place(game: dict[str, Any]) -> dict[str, Any] | None:
+        """Return a minimal place dict from current game state, or None."""
+        from spacesim import plain_place
+        state = public_state(game)
+        current_place = state.get("currentPlace")
+        if not current_place or not current_place.get("id"):
+            return None
+        return current_place
+
+    @app.post("/api/explore/enter")
+    def explore_enter_route():
+        """Enter the current place as a DM scene (non-streaming)."""
+        with db_connection() as db:
+            user, error = require_user(db)
+            if error:
+                return error
+            game = load_game_for_user(db, user)
+            place = _resolve_current_place(game)
+            if not place:
+                return jsonify({"message": "You are not at a named location. Travel to a station area or planet place first."}), 400
+            game, response, status_code = enter_scene(db, user, game, place)
+            save_player_state(db, user["id"], game)
+            return jsonify(response), status_code
+
+    @app.post("/api/explore/stream")
+    def explore_stream_route():
+        """Stream the DM's response to a player action in the current scene."""
+        payload = request.get_json(silent=True) or {}
+        player_text = str(payload.get("body") or "").strip()
+
+        with db_connection() as db:
+            user, error = require_user(db)
+            if error:
+                return error
+            game = load_game_for_user(db, user)
+            place = _resolve_current_place(game)
+            if not place:
+                return jsonify({"message": "You are not at a named location."}), 400
+
+        def generate():
+            with db_connection() as db:
+                yield from stream_dm_reply(db, user, game, place, player_text)
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/api/explore/message")
+    def explore_message_route():
+        """Send a player action/observation to the DM (non-streaming)."""
+        payload = request.get_json(silent=True) or {}
+        player_text = str(payload.get("body") or "").strip()
+        if not player_text:
+            return jsonify({"message": "Type something first."}), 400
+
+        with db_connection() as db:
+            user, error = require_user(db)
+            if error:
+                return error
+            game = load_game_for_user(db, user)
+            place = _resolve_current_place(game)
+            if not place:
+                return jsonify({"message": "You are not at a named location."}), 400
+            game, response, status_code = handle_explore_message(db, user, game, place, player_text)
+            save_player_state(db, user["id"], game)
+            return jsonify(response), status_code
+
+    @app.get("/api/explore/memories")
+    def explore_memories_route():
+        """Return all discovered scenes for the current player."""
+        with db_connection() as db:
+            user, error = require_user(db)
+            if error:
+                return error
+            memories = list_scene_memories(db, user["id"])
+            return jsonify({"scenes": memories})
 
     return app
 

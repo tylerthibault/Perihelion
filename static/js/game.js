@@ -3242,3 +3242,260 @@ if (speechSupported()) {
 }
 
 fetchState();
+
+// =========================================================
+// Explore / DM walk-around panel
+// =========================================================
+
+(function () {
+  const msgBox = document.getElementById("exploreMessages");
+  const placeName = document.getElementById("explorePlaceName");
+  const enterBtn = document.getElementById("exploreEnterButton");
+  const memoriesBtn = document.getElementById("exploreMemoriesButton");
+  const inputArea = document.getElementById("exploreInputArea");
+  const inputEl = document.getElementById("exploreInput");
+  const sendBtn = document.getElementById("exploreSendButton");
+
+  let exploreActive = false;
+  let exploreStreaming = false;
+  let currentPlaceId = null;
+
+  // ----------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------
+  function appendMsg(text, role, isFirstVisit) {
+    const div = document.createElement("div");
+    div.className = `explore-msg explore-msg--${role}`;
+    if (role === "dm" && isFirstVisit) {
+      const badge = document.createElement("div");
+      badge.className = "explore-first-visit-badge";
+      badge.textContent = "First discovery";
+      div.appendChild(badge);
+    }
+    const content = document.createTextNode(text);
+    div.appendChild(content);
+    msgBox.appendChild(div);
+    msgBox.scrollTop = msgBox.scrollHeight;
+    return div;
+  }
+
+  function appendSystem(text) {
+    return appendMsg(text, "system", false);
+  }
+
+  function clearMessages() {
+    msgBox.innerHTML = "";
+  }
+
+  function setPlaceHeader() {
+    if (currentState && currentState.currentPlace && currentState.currentPlace.name) {
+      placeName.textContent = currentState.currentPlace.name;
+      return true;
+    }
+    placeName.textContent = "No location";
+    return false;
+  }
+
+  function setInputVisible(visible) {
+    inputArea.style.display = visible ? "flex" : "none";
+  }
+
+  // ----------------------------------------------------------
+  // Enter scene
+  // ----------------------------------------------------------
+  async function enterScene() {
+    if (!setPlaceHeader()) {
+      appendSystem("You need to be at a station area or planet place first. Use the System tab to travel.");
+      return;
+    }
+    clearMessages();
+    const typing = appendMsg("The scene comes into focus…", "typing", false);
+    enterBtn.disabled = true;
+    exploreStreaming = true;
+    setInputVisible(false);
+
+    try {
+      const resp = await fetch("/api/explore/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: "" }),
+        credentials: "same-origin",
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        typing.remove();
+        appendSystem(err.message || "DM is unavailable. Configure a comms provider first.");
+        return;
+      }
+
+      typing.remove();
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let dmDiv = null;
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.type === "token") {
+              if (!dmDiv) dmDiv = appendMsg("", "dm", false);
+              fullText += evt.text;
+              dmDiv.childNodes[dmDiv.childNodes.length - 1].textContent = fullText;
+              msgBox.scrollTop = msgBox.scrollHeight;
+            } else if (evt.type === "done") {
+              if (dmDiv) dmDiv.childNodes[dmDiv.childNodes.length - 1].textContent = evt.text || fullText;
+              if (evt.isFirstVisit && dmDiv) {
+                const badge = document.createElement("div");
+                badge.className = "explore-first-visit-badge";
+                badge.textContent = "First discovery";
+                dmDiv.insertBefore(badge, dmDiv.firstChild);
+              }
+              currentPlaceId = evt.placeId;
+              exploreActive = true;
+              setInputVisible(true);
+              msgBox.scrollTop = msgBox.scrollHeight;
+            } else if (evt.type === "error") {
+              appendSystem(evt.message || "DM error.");
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (err) {
+      appendSystem("Connection lost: " + err.message);
+    } finally {
+      enterBtn.disabled = false;
+      exploreStreaming = false;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Send player action
+  // ----------------------------------------------------------
+  async function sendPlayerAction() {
+    const text = inputEl.value.trim();
+    if (!text || exploreStreaming) return;
+    inputEl.value = "";
+    appendMsg(text, "player", false);
+
+    exploreStreaming = true;
+    sendBtn.disabled = true;
+
+    try {
+      const resp = await fetch("/api/explore/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: text }),
+        credentials: "same-origin",
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        appendSystem(err.message || "DM offline.");
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let dmDiv = null;
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.type === "token") {
+              if (!dmDiv) dmDiv = appendMsg("", "dm", false);
+              fullText += evt.text;
+              dmDiv.childNodes[dmDiv.childNodes.length - 1].textContent = fullText;
+              msgBox.scrollTop = msgBox.scrollHeight;
+            } else if (evt.type === "done") {
+              if (dmDiv) dmDiv.childNodes[dmDiv.childNodes.length - 1].textContent = evt.text || fullText;
+              if (evt.gameAction) {
+                appendSystem(`⚙ Game action: ${evt.gameAction.summary || evt.gameAction.game_action}`);
+              }
+              msgBox.scrollTop = msgBox.scrollHeight;
+            } else if (evt.type === "error") {
+              appendSystem(evt.message || "DM error.");
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (err) {
+      appendSystem("Connection lost: " + err.message);
+    } finally {
+      sendBtn.disabled = false;
+      exploreStreaming = false;
+      inputEl.focus();
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Journal / memories overlay
+  // ----------------------------------------------------------
+  async function showMemories() {
+    try {
+      const resp = await fetch("/api/explore/memories", { credentials: "same-origin" });
+      const data = await resp.json();
+      const scenes = data.scenes || [];
+      clearMessages();
+      setInputVisible(false);
+      if (!scenes.length) {
+        appendSystem("You haven't discovered any scenes yet. Travel to a location and press Enter scene.");
+        return;
+      }
+      appendSystem(`— ${scenes.length} discovered location${scenes.length !== 1 ? "s" : ""} —`);
+      for (const s of scenes) {
+        const div = document.createElement("div");
+        div.className = "explore-msg explore-msg--dm";
+        div.innerHTML = `<strong>${s.place_name}</strong><br><small style="opacity:0.55">Visited ${s.visit_count}×  ·  Last: ${s.last_visited_at.slice(0, 10)}</small><br><br>${s.dm_summary || s.first_description || ""}`;
+        msgBox.appendChild(div);
+      }
+      msgBox.scrollTop = msgBox.scrollHeight;
+    } catch (err) {
+      appendSystem("Could not load journal: " + err.message);
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Event wiring
+  // ----------------------------------------------------------
+  if (enterBtn) enterBtn.addEventListener("click", enterScene);
+  if (memoriesBtn) memoriesBtn.addEventListener("click", showMemories);
+  if (sendBtn) sendBtn.addEventListener("click", sendPlayerAction);
+  if (inputEl) {
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendPlayerAction();
+      }
+    });
+  }
+
+  // When player navigates to Explore tab, auto-update place name
+  document.querySelectorAll("[data-view='explore']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setPlaceHeader();
+      if (!exploreActive && msgBox && msgBox.childNodes.length === 0) {
+        appendSystem("Press \"Enter scene\" to have the Dungeon Master describe your surroundings.");
+      }
+    });
+  });
+})();
