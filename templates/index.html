@@ -241,6 +241,34 @@
             </section>
           </div>
         </section>
+
+        <!-- Explore / DM walk-around view -->
+        <section class="view" id="view-explore">
+          <section class="panel fill-panel explore-panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Dungeon Master</p>
+                <h2 id="explorePlaceName">No location</h2>
+              </div>
+              <div class="panel__header-actions">
+                <button id="exploreEnterButton">Enter scene</button>
+                <button id="exploreMemoriesButton">Journal</button>
+              </div>
+            </div>
+            <div class="panel__body explore-body">
+              <div id="exploreMessages" class="explore-messages" aria-live="polite"></div>
+            </div>
+            <div class="panel__footer explore-footer" id="exploreInputArea" style="display:none">
+              <textarea
+                id="exploreInput"
+                class="explore-input"
+                placeholder="What do you do? Look around, touch something, talk to someone…"
+                rows="2"
+              ></textarea>
+              <button id="exploreSendButton">Send</button>
+            </div>
+          </section>
+        </section>
       </section>
     </main>
 
@@ -368,35 +396,6 @@
           <p id="providerStatus" class="settings-note"></p>
         </section>
       </section>
-
-      <!-- Explore / DM walk-around view -->
-      <section class="view" id="view-explore">
-        <section class="panel fill-panel explore-panel">
-          <div class="panel__header">
-            <div>
-              <p class="eyebrow">Dungeon Master</p>
-              <h2 id="explorePlaceName">No location</h2>
-            </div>
-            <div class="panel__header-actions">
-              <button id="exploreEnterButton">Enter scene</button>
-              <button id="exploreMemoriesButton">Journal</button>
-            </div>
-          </div>
-          <div class="panel__body explore-body">
-            <div id="exploreMessages" class="explore-messages" aria-live="polite"></div>
-          </div>
-          <div class="panel__footer explore-footer" id="exploreInputArea" style="display:none">
-            <textarea
-              id="exploreInput"
-              class="explore-input"
-              placeholder="What do you do? Look around, touch something, talk to someone…"
-              rows="2"
-            ></textarea>
-            <button id="exploreSendButton">Send</button>
-          </div>
-        </section>
-      </section>
-    </div>
 
     <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
